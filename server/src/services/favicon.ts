@@ -1,5 +1,6 @@
 import Elysia, { t } from "elysia";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getEnv } from "../utils/di";
 import { setup } from "../setup";
 import { createS3Client } from "../utils/s3";
@@ -27,27 +28,22 @@ export function FaviconService() {
         .use(setup())
         .get("/favicon", async ({ set }) => {
             try {
-                const response = await fetch(
-                    new Request(`${accessHost}/${faviconKey}`),
+                const res = await s3.send(
+                    new GetObjectCommand({
+                        Bucket: bucket,
+                        Key: faviconKey,
+                    })
                 );
-
-                if (!response.ok) {
-                    set.status = response.status;
-                    return await response.text();
-                }
-
+        
                 set.headers["Content-Type"] = "image/webp";
-                set.headers["Cache-Control"] = "public, max-age=31536000"; // 1 year
-
-                return await response.arrayBuffer();
-            } catch (error) {
-                if (error instanceof Error) {
-                    set.status = 500;
-                    console.error("Error fetching favicon:", error);
-                    return `Error fetching favicon: ${error.message}`;
-                }
+                set.headers["Cache-Control"] = "public, max-age=31536000";
+        
+                return await res.Body.transformToByteArray();
+            } catch (e) {
+                set.status = 404;
+                return "Favicon not found";
             }
-        })
+        });
         .get("/favicon/original", async ({ set }) => {
             try {
                 let originFaviconKey = null;
